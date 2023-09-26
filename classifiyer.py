@@ -61,7 +61,7 @@ def set_device():
         dev = 'cpu'
     return torch.device(dev)
 
-resnet18_model = models.resnet18(pretrained=False)
+resnet18_model = models.resnet18(pretrained=True)
 num_ftrs = resnet18_model.fc.in_features
 number_of_classes = 10
 resnet18_model.fc = nn.Linear(num_ftrs, number_of_classes)
@@ -94,10 +94,22 @@ def evaluate_model_on_test_set(model, test_loader):
     
     print(predicted_correctly_on_epoch, total, epoch_acc)
 
+    return epoch_acc
+
+def save_checkpoint(model, epoch, optimiser, best_acc):
+    state = {
+        "epoch" : epoch + 1,
+        "model" : model.state_dict(),
+        "best accuracy" : best_acc,
+        "optimiser" : optimiser.state_dict()
+    }
+    torch.save(state, "model_best_checkpoint.pth.tar")
+
 
 
 def train_nn(model, train_loader, test_loader, criterion, optimiser, n_epochs):
     device = set_device()
+    best_acc = 0
 
     for epoch in range(n_epochs):
         model.train()
@@ -125,10 +137,25 @@ def train_nn(model, train_loader, test_loader, criterion, optimiser, n_epochs):
         epoch_loss = running_loss/len(train_loader)
         epoch_acc = 100*(running_correct/total)
         print("running loss %d, running accuracy %d, epoch number %d"%(epoch_loss, epoch_acc, epoch))
-        evaluate_model_on_test_set(resnet18_model, test_loader)
+        
+        test_dataset_acc = evaluate_model_on_test_set(resnet18_model, test_loader)
+
+        if test_dataset_acc > best_acc:
+            best_acc = test_dataset_acc
+            save_checkpoint(model, epoch, optimiser, best_acc)
 
     print("finished")
     return model
 
 
 train_nn(resnet18_model, train_loader, test_loader, loss_fn, optimiser, 20)
+
+checkpoint = torch.load('model_best_checkpoint.pth.tar')
+
+resnet18_model = models.resnet18(pretrained=False)
+num_ftrs = resnet18_model.fc.in_features
+number_of_classes = 10
+resnet18_model.fc = nn.Linear(num_ftrs, number_of_classes)
+resnet18_model.load_state_dict(checkpoint["model"])
+
+torch.save(resnet18_model, "best_model.pth")
